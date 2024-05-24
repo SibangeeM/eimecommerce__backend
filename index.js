@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
+
 const dotenv = require("dotenv").config();
 const app = express();
 app.use(cors());
@@ -14,9 +15,9 @@ mongoose
   .then(() => console.log("Connect to Databse"))
   .catch((err) => console.log(err));
 
-//schema
+//user schema
 const userSchema = mongoose.Schema({
-  image:String,
+  image: String,
   name: String,
   email: {
     type: String,
@@ -38,9 +39,124 @@ const userSchema = mongoose.Schema({
   servicableRegions: String,
   password: String,
   confirmPassword: String,
+  isAdmin: {
+    type: Boolean,
+    required: true,
+    default: false,
+  },
+});
+const userModel = mongoose.model("users", userSchema);
+
+// order schema
+const orderSchema = mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      ref: "User",
+    },
+    username: {
+      type: String,
+      required: true,
+    },
+    orderItems: [
+      {
+        name: { type: String, required: true },
+        qty: { type: Number, required: true },
+        image: { type: String, required: true },
+        price: { type: Number, required: true },
+        product: {
+          type: mongoose.Schema.Types.ObjectId,
+          required: true,
+          ref: "Product",
+        },
+      },
+    ],
+    shippingAddress: {
+      address: { type: String, required: true },
+      city: { type: String, required: true },
+      postalCode: { type: String, required: true },
+      country: { type: String, required: true },
+    },
+    paymentMethod: {
+      type: String,
+      required: true,
+      default: "Paypal",
+    },
+    paymentResult: {
+      id: { type: String },
+      status: { type: String },
+      update_time: { type: String },
+      email_address: { type: String },
+    },
+    shippingPrice: {
+      type: Number,
+      required: true,
+      default: 0.0,
+    },
+    totalPrice: {
+      type: Number,
+      required: true,
+      default: 0.0,
+    },
+    isPaid: {
+      type: Boolean,
+      required: true,
+      default: false,
+    },
+    paidAt: {
+      type: Date,
+    },
+    isDelivered: {
+      type: Boolean,
+      required: true,
+      default: false,
+    },
+    deliveredAt: {
+      type: Date,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+const orderModel = mongoose.model("Order", orderSchema);
+
+app.post("/orders", async (req, res) => {
+  const {
+    user,
+    username,
+    orderItems,
+    shippingAddress,
+    shippingPrice,
+    paymentMethod,
+    totalPrice,
+  } = req.body;
+  try {
+    const newOrder = new orderModel({
+      user,
+      username,
+      orderItems,
+      shippingAddress,
+      paymentMethod,
+      shippingPrice,
+      totalPrice,
+      isPaid: false,
+      isDelivered: false,
+    });
+
+    const savedOrder = await newOrder.save();
+    res.send({
+      message: "Order placed successfully",
+      alert: true,
+      order: savedOrder,
+    });
+  } catch (error) {
+    console.error("Failed to create order:", error);
+    res.status(500).send({ message: "Failed to place order", alert: false });
+  }
 });
 
-const userModel = mongoose.model("users", userSchema);
 //api
 app.get("/", (req, res) => {
   res.send("Server is running");
@@ -97,6 +213,7 @@ app.post("/login", async (req, res) => {
           name: user.name,
           email: user.email,
           phone: user.phone,
+          address: user.address,
           image: user.image,
           apt: user.apt,
           city: user.city,
@@ -137,17 +254,29 @@ app.post("/login", async (req, res) => {
 const schemaProduct = mongoose.Schema({
   name: String,
   materials: String,
+  materialName: String,
   image: String,
-  grade:String,
   pricePound: String,
-  priceTon: String,
   description: String,
 });
 const productModel = mongoose.model("product", schemaProduct);
+
+app.get("/orders/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const orders = await orderModel.find({ user: userId }).exec();
+    res.json(orders);
+  } catch (error) {
+    console.error("Failed to fetch orders:", error);
+    res.status(500).send({ message: "Failed to fetch orders" });
+  }
+});
+
 //save product in data
 //api
+
 app.post("/uploadProduct", async (req, res) => {
-  // console.log(req.body)
+  console.log(res);
   const data = await productModel(req.body);
   const datasave = await data.save();
   res.send({ message: "Upload successfully" });
