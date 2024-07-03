@@ -99,6 +99,11 @@ const orderSchema = mongoose.Schema(
       required: true,
       default: 0.0,
     },
+    orderStatus: {
+      type: String,
+      required: true,
+      default: "Pending", // Ensuring it has a default value if not provided
+    },
     isPaid: {
       type: Boolean,
       required: true,
@@ -121,8 +126,8 @@ const orderSchema = mongoose.Schema(
   }
 );
 const orderModel = mongoose.model("Order", orderSchema);
-
 app.post("/orders", async (req, res) => {
+  console.log(req.body);
   const {
     user,
     username,
@@ -131,7 +136,20 @@ app.post("/orders", async (req, res) => {
     shippingPrice,
     paymentMethod,
     totalPrice,
+    orderStatus,
   } = req.body;
+
+  console.log("Final order object before saving:", {
+    user,
+    username,
+    orderItems,
+    shippingAddress,
+    paymentMethod,
+    shippingPrice,
+    totalPrice,
+    orderStatus, // Verify what status is being set
+  });
+
   try {
     const newOrder = new orderModel({
       user,
@@ -141,6 +159,7 @@ app.post("/orders", async (req, res) => {
       paymentMethod,
       shippingPrice,
       totalPrice,
+      orderStatus,
       isPaid: false,
       isDelivered: false,
     });
@@ -287,5 +306,44 @@ app.get("/product", async (req, res) => {
   res.send(JSON.stringify(data));
 });
 
-//server is ruuning
-app.listen(PORT, () => console.log("server is running at port : " + PORT));
+//stripe
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: "2022-08-01",
+});
+
+
+app.get("/config", (req, res) => {
+  res.send({
+    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+  });
+});
+
+app.post("/create-payment-intent", async (req, res) => {
+  try {
+    // Extract the amount from the request body
+    const { amount } = req.body;
+
+    // Create a PaymentIntent with the calculated amount
+    const paymentIntent = await stripe.paymentIntents.create({
+      currency: "usd",
+      amount: Math.round(amount), // Amount should be in cents
+      automatic_payment_methods: { enabled: true },
+    });
+
+    // Send publishable key and PaymentIntent details to client
+    res.send({
+      clientSecret: paymentIntent.client_secret,
+    });
+  } catch (e) {
+    return res.status(400).send({
+      error: {
+        message: e.message,
+      },
+    });
+  }
+});
+
+// server is running
+app.listen(PORT, () => console.log("Server is running at port: " + PORT));
+
+
