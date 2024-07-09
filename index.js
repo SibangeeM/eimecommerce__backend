@@ -6,13 +6,20 @@ const dotenv = require("dotenv").config();
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 8000;
+const path = require("path");
+app.use(express.json());
+const _dirname = path.dirname("");
+const buildpath = path.join(_dirname, "../Frontend/build");
+app.use(express.static(buildpath));
+
+
 //mongodb connection
-console.log(process.env.MONGODB_URL);
+// console.log(process.env.MONGODB_URL);
 mongoose.set("strictQuery", false);
 mongoose
   .connect(process.env.MONGODB_URL)
-  .then(() => console.log("Connect to Databse"))
+  .then(() => console.log("Connect to Database"))
   .catch((err) => console.log(err));
 
 //user schema
@@ -73,10 +80,13 @@ const orderSchema = mongoose.Schema(
       },
     ],
     shippingAddress: {
+      name: { type: String, required: true },
+      phoneNumber: { type: String, required: true },
       address: { type: String, required: true },
       city: { type: String, required: true },
       postalCode: { type: String, required: true },
       country: { type: String, required: true },
+      specialInstructions: { type: String, required: true },
     },
     paymentMethod: {
       type: String,
@@ -311,7 +321,6 @@ const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2022-08-01",
 });
 
-
 app.get("/config", (req, res) => {
   res.send({
     publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
@@ -343,7 +352,58 @@ app.post("/create-payment-intent", async (req, res) => {
   }
 });
 
+// contact us form schema
+const formSchema = mongoose.Schema(
+  {
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+    },
+    message: {
+      type: String,
+      required: true,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+const formModel = mongoose.model("Form", formSchema);
+app.post("/message", async (req, res) => {
+  console.log(res);
+  const data = await formModel(req.body);
+  const datasave = await data.save();
+  res.send({ message: "Message Sent successfully" });
+});
+
+// user updates
+app.put("/users/:userId", async (req, res) => {
+  const { userId } = req.params;
+  const updateData = req.body;
+
+  try {
+    const updatedUser = await userModel.findByIdAndUpdate(userId, updateData, {
+      new: true,
+    });
+
+    if (!updatedUser) {
+      return res.status(404).send({ message: "User not found" });
+    }
+
+    res.send({
+      message: "User updated successfully",
+      alert: true,
+      data: updatedUser,
+    });
+  } catch (error) {
+    console.error("Failed to update user data:", error);
+    res
+      .status(500)
+      .send({ message: "Failed to update user data", alert: false });
+  }
+});
+
 // server is running
 app.listen(PORT, () => console.log("Server is running at port: " + PORT));
-
-
